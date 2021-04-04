@@ -23,11 +23,9 @@ in_file = sys.argv[1]
 if len(sys.argv) > 2:
 	out_file = sys.argv[2]
 else:
-	out_file = f"{in_file}.out"
+	out_file = f"out.{in_file}"
 assert not os.path.isfile(out_file), f"out file {out_file} already exists"
 
-
-"""does imageio need to see the file extension when starting the writer? if so, change the outfile naming convention so it doesn't go over the file extension"""
 
 #
 #	open imageio video reader and writer
