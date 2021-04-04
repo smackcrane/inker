@@ -1,0 +1,67 @@
+#!/bin/python3
+
+import sys
+import os.path
+from inker import *
+
+
+# define parameters for transformation
+verbose = True				# print extra status / analytics info
+block_size = 110	# number of frames before a pixel is 'inked'
+bw_cutoff = 120		# threshold below which a pixel is 'black'
+only_ink_frames = False		# skip frames where no pixel changes
+outro_length = 3			# number of seconds to hold final frame at end
+
+
+#
+#	read input file and optional output file from command line
+#
+
+assert len(sys.argv) > 1, "need a video file to chonk"
+
+in_file = sys.argv[1]
+if len(sys.argv) > 2:
+	out_file = sys.argv[2]
+else:
+	out_file = f"{in_file}.out"
+assert not os.path.isfile(out_file), f"out file {out_file} already exists"
+
+
+"""does imageio need to see the file extension when starting the writer? if so, change the outfile naming convention so it doesn't go over the file extension"""
+
+#
+#	open imageio video reader and writer
+#
+
+try:
+	reader = imageio.get_reader(in_file)
+except:
+	raise
+
+metadata = reader.get_meta_data()
+fps = metadata['fps']
+total_frames = reader.count_frames()
+
+try:
+	writer = imageio.get_writer(out_file, fps=fps)
+except:
+	raise
+
+#
+#	process video
+#
+
+inker(reader,
+			writer,
+			block_size,
+			bw_cutoff,
+			only_ink_frames,
+			outro_length)
+
+#
+# clean up
+#
+
+reader.close()
+writer.close()
+
