@@ -38,7 +38,6 @@ except:
 
 metadata = reader.get_meta_data()
 fps = metadata['fps']
-total_frames = reader.count_frames()
 
 try:
 	writer = imageio.get_writer(out_file, fps=fps)

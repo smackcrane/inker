@@ -2,22 +2,19 @@
 import sys
 import numpy as np
 import imageio
-import time
-import random
 from tqdm import tqdm
 
 
 # check if a pixel is ``black''
 # takes uint8
 def is_black(pixel, threshold):
-	# convert to int so that it works properly (who knows?)
-	return int(pixel) < threshold
+	# do we need to convert to int so that it works properly?
+	return pixel < threshold
 
 # convert a frame to grayscale
 def grayscale(frame):
 	frame = np.average(frame, axis=2)
-	frame = frame.astype(np.uint8)
-	return frame
+	return frame.astype(np.uint8)
 
 # read in a block of frames from a VideoCapture
 # size = number of frames
@@ -43,7 +40,7 @@ def find_ink_frame(frame_buffer, i, j, block_size, bw_cutoff):
 	y = 0
 	while x < len(frame_buffer):
 		# step back until we find a white pixel or the beginning of the buffer
-		while is_black(frame_buffer[x-y][i][j], bw_cutoff) and x-y >= 0:
+		while is_black(frame_buffer[x-y,i,j], bw_cutoff) and x-y >= 0:
 			y += 1
 		# once we find a white pixel
 		# if we've found a long enough run, return
@@ -56,7 +53,6 @@ def find_ink_frame(frame_buffer, i, j, block_size, bw_cutoff):
 	# at this point we've reached the end of the buffer without finding a long enough run
 	return None
 
-
 # main
 def inker(reader, writer,
 		block_size, bw_cutoff, only_ink_frames, outro_length):
@@ -68,9 +64,8 @@ def inker(reader, writer,
 	total_frames = reader.count_frames()
 
 	# grab final frame (then re-initialize reader to get back to first frame)
-	#	this is a hack because imageio seems to dislike getting the last frame
-	final_frame = reader.get_data(total_frames - 2)
-	#final_frame, _ = reader._read_frame()
+	#		use '- 2' because imageio seems to dislike the final frame
+	final_frame = reader.get_data(total_frames - 3)
 	reader._initialize()
 	# convert -> numpy array -> grayscale -> black & white
 	final_frame = np.array(final_frame, dtype=np.uint8)
@@ -111,7 +106,7 @@ def inker(reader, writer,
 		# rewrite frames in front block
 		for f in range(block_size):
 			current_frame = block_number*block_size + f
-			frame_buffer[f] = np.where(ink_frame > current_frame, 255, 0)
+			frame_buffer[f] = np.where(ink_frame <= current_frame, 0, 255)
 		# write front block to output
 		for f in range(block_size):
 			if only_ink_frames and f not in new_inked_frames:
