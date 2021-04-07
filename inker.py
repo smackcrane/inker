@@ -55,16 +55,19 @@ def find_ink_frame(frame_buffer, i, j, block_size, bw_cutoff):
 
 # main
 def inker(reader, writer,
-		block_size, bw_cutoff, only_ink_frames, outro_length):
+		block_size, bw_cutoff, only_ink_frames, outro_length, verbose=False):
 
+	if verbose: print('reading metadata ... ', end='', flush=True)
 	# read metadata
 	metadata = reader.get_meta_data()
 	width, height = metadata['size']
 	fps = metadata['fps']
 	total_frames = reader.count_frames()
+	if verbose: print('done', flush=True)
 
 	# grab final frame (then re-initialize reader to get back to first frame)
 	#		use '- 2' because imageio seems to dislike the final frame
+	if verbose: print('processing final frame ... ', end='', flush=True)
 	final_frame = reader.get_data(total_frames - 3)
 	reader._initialize()
 	# convert -> numpy array -> grayscale -> black & white
@@ -76,21 +79,25 @@ def inker(reader, writer,
 	# make list of pixels which are black in the final, i.e. need to be inked
 	uninked = np.where(final_frame == 0)
 	uninked = list(zip(uninked[0],uninked[1]))
+	if verbose: print('done', flush=True)
 
 	# initialize matrix of ink frames
 	ink_frame = np.full((height, width), total_frames)
 
 	# initialize frame buffer
+	if verbose: print('initializing frame buffer ... ', end='', flush=True)
 	assert total_frames > 2*block_size, "video too short, reduce block size"
 	frame_buffer = read_block(reader, block_size)
 	frame_buffer = np.concatenate((frame_buffer,
 																	read_block(reader, block_size)))
+	if verbose: print('done', flush=True)
 
 
 	# main processing loop
 	
 	for block_number in tqdm(range(total_frames//block_size - 1)):
 		# search for new ink frames
+		if verbose: print('searching for ink frames ... ', end='', flush=True)
 		new_inked_pixels = []	# pixels to remove from uninked list
 		new_inked_frames = []	# list of frames in which a new pixel is inked
 		for [i,j] in uninked:
@@ -102,18 +109,24 @@ def inker(reader, writer,
 		# remove pixels we just inked from uninked list
 		for [i,j] in new_inked_pixels:
 			uninked.remove((i,j))
+		if verbose: print('done', flush=True)
 
 		# rewrite frames in front block
+		if verbose: print('computing frames ... ', end='', flush=True)
 		for f in range(block_size):
 			current_frame = block_number*block_size + f
 			frame_buffer[f] = np.where(ink_frame <= current_frame, 0, 255)
+		if verbose: print('done', flush=True)
 		# write front block to output
+		if verbose: print('writing frames to file ... ', end='', flush=True)
 		for f in range(block_size):
 			if only_ink_frames and f not in new_inked_frames:
 				pass
 			else:
 				writer.append_data(frame_buffer[f])
+		if verbose: print('done', flush=True)
 		# delete front block and read in new block
+		if verbose: print('reading new block ... ', end='', flush=True)
 		frame_buffer = frame_buffer[block_size:]
 		try:
 			frame_buffer = np.concatenate((frame_buffer,
@@ -123,10 +136,12 @@ def inker(reader, writer,
 			print(f"total frames: {total_frames}")
 			print(f"block size: {block_size}")
 			raise error
+		if verbose: print('done', flush=True)
 
 	# Final processing when we've run out of blocks
 	# 	at this point frame_buffer should contain 1 full block
 	#		plus the rest of the frames
+	if verbose: print('final processing loop ... ', end='', flush=True)
 
 	block_number = total_frames//block_size - 1
 
@@ -165,5 +180,6 @@ def inker(reader, writer,
 	for _ in range(int(outro_length * fps)):
 		writer.append_data(frame_buffer[-1])
 
+	if verbose: print('done', flush=True)
 
 
