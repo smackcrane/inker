@@ -53,6 +53,7 @@ def find_ink_frame(frame_buffer, i, j, block_size, bw_cutoff):
 	# at this point we've reached the end of the buffer without finding a long enough run
 	return None
 
+
 # main
 def inker(reader, writer,
 		block_size, bw_cutoff, only_ink_frames, outro_length, verbose=False):
@@ -68,7 +69,15 @@ def inker(reader, writer,
 	# grab final frame (then re-initialize reader to get back to first frame)
 	#		use '- 2' because imageio seems to dislike the final frame
 	if verbose: print('processing final frame ... ', end='', flush=True)
-	final_frame = reader.get_data(total_frames - 3)
+	n = 1	# hack because imageio really struggles here
+	while True:
+		try:
+			final_frame = reader.get_data(total_frames - n)
+			break
+		except IndexError:
+			if verbose: print(f"could not get frame -{n}, trying -{n+1}")
+			n += 1
+
 	reader._initialize()
 	# convert -> numpy array -> grayscale -> black & white
 	final_frame = np.array(final_frame, dtype=np.uint8)
