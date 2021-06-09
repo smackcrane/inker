@@ -6,9 +6,9 @@ from inker import *
 
 
 # define parameters for transformation
-block_size = 110	# number of frames before a pixel is 'inked'
+block_size = 60		# number of frames before a pixel is 'inked'
 bw_cutoff = 120		# threshold below which a pixel is 'black'
-only_ink_frames = False		# skip frames where no pixel changes
+only_ink_frames = True		# skip frames where no pixel changes
 outro_length = 3			# number of seconds to hold final frame at end
 
 
@@ -55,6 +55,41 @@ try:
 except:
 	raise
 if verbose: print('done', flush=True)
+
+#
+# ask for parameters
+#
+
+# defaults
+block_size = 60		# number of frames before a pixel is 'inked'
+bw_cutoff = 120		# threshold below which a pixel is 'black'
+only_ink_frames = False		# skip frames where no pixel changes
+outro_length = 3			# number of seconds to hold final frame at end
+
+print("please enter parameters (or leave blank for default value)")
+try:
+  block_size = int(input(f"block_size (int frames, default {block_size}): "))
+except ValueError:
+  pass
+try:
+  bw_cutoff = int(
+      input(f"bw_cutoff (0-255 pixel intensity, default {bw_cutoff}): ")
+      )
+except ValueError:
+  pass
+try:
+  only_ink_frames = bool(
+      int(input(f"only_ink_frames (0-1 bool, default {int(only_ink_frames)}): "))
+      )
+except ValueError:
+  pass
+try:
+  outro_length = int(
+      input(f"outro_length(int seconds, default {outro_length}): ")
+      )
+except ValueError:
+  pass
+
 
 #
 #	process video
