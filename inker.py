@@ -116,9 +116,15 @@ def inker(reader, writer,
 				new_inked_pixels.append([i,j])
 				new_inked_frames.append(f)
 		# remove pixels we just inked from uninked list
+    if verbose: count_new_inked = 0
 		for [i,j] in new_inked_pixels:
+			if verbose: count_new_inked += 1
 			uninked.remove((i,j))
-		if verbose: print('done', flush=True)
+		if verbose:
+      print(
+          f'{count_new_inked} pixels inked in block {block_number}\ndone',
+          flush=True
+          )
 
 		# rewrite frames in front block
 		if verbose: print('computing frames ... ', end='', flush=True)
