@@ -18,15 +18,17 @@ def grayscale(frame):
 
 # read in a block of frames from a VideoCapture
 # size = number of frames
-def read_block(reader, block_size):
+# stride = n  means only use every nth frame
+def read_block(reader, block_size, stride):
   block = []
-  for _ in range(block_size):
+  for i in range(block_size*stride):
     try:
       frame, _ = reader._read_frame()
     except StopIteration:
       break
-    frame = grayscale(frame)
-    block.append(frame)
+    if i % stride == 0:
+      frame = grayscale(frame)
+      block.append(frame)
   return np.asarray(block, dtype=np.uint8)
 
 
@@ -58,12 +60,19 @@ def find_ink_frame(frame_buffer, i, j, block_size, bw_cutoff):
 # returns list of parameters
 def get_parameters():
   # defaults
+  stride = 1        # stride = n  means only use every nth frame
   block_size = 60   # number of frames before a pixel is 'inked'
   bw_cutoff = 120   # threshold below which a pixel is 'black'
   only_ink_frames = False   # skip frames where no pixel changes
   outro_length = 3      # number of seconds to hold final frame at end
 
   print("please enter parameters (or leave blank for default value)")
+  try:
+    stride = int(input(
+        f"stride (int n -> keep every nth frame, default {stride}): "
+        ))
+  except ValueError:
+    pass
   try:
     block_size = int(
         input(f"block_size (int frames, default {block_size}): ")
@@ -89,7 +98,7 @@ def get_parameters():
   except ValueError:
     pass
 
-  return block_size, bw_cutoff, only_ink_frames, outro_length
+  return stride, block_size, bw_cutoff, only_ink_frames, outro_length
 
 # main
 def inker(reader, writer, verbose=False):
@@ -107,7 +116,13 @@ def inker(reader, writer, verbose=False):
     print(f"total_frames={total_frames}", flush=True)
     print('done', flush=True)
 
-  block_size, bw_cutoff, only_ink_frames, outro_length = get_parameters()
+  [
+      stride,
+      block_size,
+      bw_cutoff,
+      only_ink_frames,
+      outro_length
+  ] = get_parameters()
 
   # grab final frame (then re-initialize reader to get back to first frame)
   #		use '- 2' because imageio seems to dislike the final frame
@@ -118,8 +133,8 @@ def inker(reader, writer, verbose=False):
       final_frame = reader.get_data(total_frames - n)
       break
     except IndexError:
-      if verbose: print(f"could not get frame -{n}, trying -{n+1}")
-      n += 1
+      if verbose: print(f"could not get frame -{n}, trying -{n+stride}")
+      n += stride
 
   reader._initialize()
   # convert -> numpy array -> grayscale -> black & white
@@ -139,10 +154,10 @@ def inker(reader, writer, verbose=False):
   # initialize frame buffer
   if verbose: print('initializing frame buffer ... ', end='', flush=True)
   assert total_frames > 2*block_size, "video too short, reduce block size"
-  frame_buffer = read_block(reader, block_size)
+  frame_buffer = read_block(reader, block_size, stride)
   frame_buffer = np.concatenate((
                   frame_buffer,
-                  read_block(reader, block_size)
+                  read_block(reader, block_size, stride)
                   ))
   if verbose: print('done', flush=True)
 
@@ -191,7 +206,7 @@ def inker(reader, writer, verbose=False):
     try:
       frame_buffer = np.concatenate((
                           frame_buffer,
-                          read_block(reader, block_size)
+                          read_block(reader, block_size, stride)
                           ))
     except Exception as error:
       print(f"block number: {block_number}/{total_frames//block_size-2}")
