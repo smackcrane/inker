@@ -2,6 +2,7 @@
 import sys
 import numpy as np
 import imageio
+from matplotlib import pyplot as plt
 from tqdm import tqdm
 
 
@@ -19,7 +20,7 @@ def grayscale(frame):
 # read in a block of frames from a VideoCapture
 # size = number of frames
 # stride = n  means only use every nth frame
-def read_block(reader, block_size, stride):
+def read_block(reader, block_size, stride, crop):
   block = []
   for i in range(block_size*stride):
     try:
@@ -27,7 +28,12 @@ def read_block(reader, block_size, stride):
     except StopIteration:
       break
     if i % stride == 0:
+      # convert to grayscale and crop
       frame = grayscale(frame)
+      frame = frame[
+          crop['top']:crop['bottom'],
+          crop['left']:crop['right']
+          ]
       block.append(frame)
   return np.asarray(block, dtype=np.uint8)
 
@@ -60,13 +66,13 @@ def find_ink_frame(frame_buffer, i, j, block_size, bw_cutoff):
 # returns list of parameters
 def get_parameters():
   # defaults
-  stride = 1        # stride = n  means only use every nth frame
+  stride = 10       # stride = n  means only use every nth frame
   block_size = 60   # number of frames before a pixel is 'inked'
   bw_cutoff = 120   # threshold below which a pixel is 'black'
   only_ink_frames = False   # skip frames where no pixel changes
   outro_length = 3      # number of seconds to hold final frame at end
 
-  print("please enter parameters (or leave blank for default value)")
+  print("\nplease enter parameters (or leave blank for default value)")
   try:
     stride = int(input(
         f"stride (int n -> keep every nth frame, default {stride}): "
@@ -100,10 +106,61 @@ def get_parameters():
 
   return stride, block_size, bw_cutoff, only_ink_frames, outro_length
 
+
+# get crop
+# returns dict crop = {'top' : int, 'bottom' : int, 'left' : etc...
+def get_crop(final_frame):
+  # show the final frame and ask for cropping
+  print("please enter cropping", flush=True)
+  plt.imshow(final_frame)
+  plt.show(block=True)
+  yn = False
+  while not yn:
+    crop = {
+        'top' : 0,
+        'bottom' : height,
+        'left' : 0,
+        'right' : width
+        }
+    try:
+      crop['top'] = int(
+          input(f"first row to include (int pixels, default {crop['top']}): ")
+          )
+    except ValueError:
+      pass
+    try:
+      crop['bottom'] = int(
+          input(f"last row to include (int pixels, default {crop['bottom']}): ")
+          )
+    except ValueError:
+      pass
+    try:
+      crop['left'] = int(input(
+          f"first column to include (int pixels, default {crop['left']}): "
+          ))
+    except ValueError:
+      pass
+    try:
+      crop['right'] = int(input(
+          f"last column to include (int pixels, default {crop['right']}): "
+          ))
+    except ValueError:
+      pass
+
+    print("Is this crop correct?", flush=True)
+    plt.imshow(final_frame[
+        crop['top']:crop['bottom'],
+        crop['left']:crop['right']
+        ])
+    plt.show(block=True)
+    yn = input("Y/y to accept, N/n to redo: ")[0] in ['Y','y']
+
+  return crop
+
 # main
 def inker(reader, writer, verbose=False):
 
-  if verbose: print('reading metadata ... ', end='', flush=True)
+  if verbose: print('reading metadata ... ', flush=True)
   # read metadata
   metadata = reader.get_meta_data()
   width, height = metadata['size']
@@ -124,6 +181,9 @@ def inker(reader, writer, verbose=False):
       outro_length
   ] = get_parameters()
 
+  # define effective frames, i.e. number of frames we'll actually use
+  eff_frames = total_frames // stride
+
   # grab final frame (then re-initialize reader to get back to first frame)
   #		use '- 2' because imageio seems to dislike the final frame
   if verbose: print('processing final frame ... ', end='', flush=True)
@@ -135,6 +195,14 @@ def inker(reader, writer, verbose=False):
     except IndexError:
       if verbose: print(f"could not get frame -{n}, trying -{n+stride}")
       n += stride
+
+  crop = get_crop(final_frame)
+
+  # crop final frame
+  final_frame = final_frame[
+      crop['top']:crop['bottom'],
+      crop['left']:crop['right']
+      ]
 
   reader._initialize()
   # convert -> numpy array -> grayscale -> black & white
@@ -149,22 +217,25 @@ def inker(reader, writer, verbose=False):
   if verbose: print('done', flush=True)
 
   # initialize matrix of ink frames
-  ink_frame = np.full((height, width), total_frames)
+  ink_frame = np.full((
+      crop['bottom']-crop['top'],
+      crop['right']-crop['left']
+      ), eff_frames)
 
   # initialize frame buffer
   if verbose: print('initializing frame buffer ... ', end='', flush=True)
-  assert total_frames > 2*block_size, "video too short, reduce block size"
-  frame_buffer = read_block(reader, block_size, stride)
+  assert eff_frames > 2*block_size, "not enough frames, reduce block size or stride"
+  frame_buffer = read_block(reader, block_size, stride, crop)
   frame_buffer = np.concatenate((
                   frame_buffer,
-                  read_block(reader, block_size, stride)
+                  read_block(reader, block_size, stride, crop)
                   ))
   if verbose: print('done', flush=True)
 
 
   # main processing loop
 
-  for block_number in tqdm(range(total_frames//block_size - 1)):
+  for block_number in tqdm(range(eff_frames//block_size - 1)):
     # search for new ink frames
     if verbose: print('searching for ink frames ... ', end='', flush=True)
     new_inked_pixels = []	# pixels to remove from uninked list
@@ -206,11 +277,12 @@ def inker(reader, writer, verbose=False):
     try:
       frame_buffer = np.concatenate((
                           frame_buffer,
-                          read_block(reader, block_size, stride)
+                          read_block(reader, block_size, stride, crop)
                           ))
     except Exception as error:
-      print(f"block number: {block_number}/{total_frames//block_size-2}")
+      print(f"block number: {block_number}/{eff_frames//block_size-2}")
       print(f"total frames: {total_frames}")
+      print(f"effective frames: {eff_frames}")
       print(f"block size: {block_size}")
       raise error
     if verbose: print('done', flush=True)
@@ -220,7 +292,7 @@ def inker(reader, writer, verbose=False):
   #		plus the rest of the frames
   if verbose: print('final processing loop ... ', end='', flush=True)
 
-  block_number = total_frames//block_size - 1
+  block_number = eff_frames//block_size - 1
 
   # search for new ink frames
   new_inked_pixels = []
