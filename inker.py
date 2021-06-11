@@ -109,7 +109,7 @@ def get_parameters():
 
 # get crop
 # returns dict crop = {'top' : int, 'bottom' : int, 'left' : etc...
-def get_crop(final_frame):
+def get_crop(final_frame, width, height):
   # show the final frame and ask for cropping
   print("please enter cropping", flush=True)
   plt.imshow(final_frame)
@@ -184,19 +184,21 @@ def inker(reader, writer, verbose=False):
   # define effective frames, i.e. number of frames we'll actually use
   eff_frames = total_frames // stride
 
-  # grab final frame (then re-initialize reader to get back to first frame)
-  #		use '- 2' because imageio seems to dislike the final frame
+  # grab final frame
   if verbose: print('processing final frame ... ', end='', flush=True)
-  n = 1	# hack because imageio really struggles here
-  while True:
+  final_index = total_frames - 1
+  final_index = final_index - (final_index % stride) # final effective index
+  while True: # hack because imageio really struggles here
     try:
-      final_frame = reader.get_data(total_frames - n)
+      final_frame = reader.get_data(final_index)
       break
     except IndexError:
-      if verbose: print(f"could not get frame -{n}, trying -{n+stride}")
-      n += stride
+      if verbose: print(
+          f"could not get frame {final_index}, trying {final_index-stride}"
+          )
+      final_index -= stride
 
-  crop = get_crop(final_frame)
+  crop = get_crop(final_frame, width, height)
 
   # crop final frame
   final_frame = final_frame[
@@ -204,6 +206,7 @@ def inker(reader, writer, verbose=False):
       crop['left']:crop['right']
       ]
 
+  # re-initialize reader to get back to first frame
   reader._initialize()
   # convert -> numpy array -> grayscale -> black & white
   final_frame = np.array(final_frame, dtype=np.uint8)
@@ -304,7 +307,7 @@ def inker(reader, writer, verbose=False):
     if not is_black(frame_buffer[x-y][i][j], bw_cutoff):
       y = 1
       # shouldn't happen, uninked list only has pixels black in final frame
-      assert False, "uninked pixel not black in final frame"
+      print("WARNING: uninked pixel not black in final frame")
     while x-y >= 0 and is_black(frame_buffer[x-y][i][j], bw_cutoff):
       y += 1
     f = x-y+1
