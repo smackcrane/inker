@@ -112,7 +112,7 @@ def get_parameters():
 def get_crop(final_frame, width, height):
   # show the final frame and ask for cropping
   print("please enter cropping", flush=True)
-  plt.imshow(final_frame)
+  plt.imshow(final_frame, cmap='gray', vmin=0, vmax=255)
   plt.show(block=True)
   yn = False
   while not yn:
@@ -151,7 +151,7 @@ def get_crop(final_frame, width, height):
     plt.imshow(final_frame[
         crop['top']:crop['bottom'],
         crop['left']:crop['right']
-        ])
+        ], cmap='gray', vmin=0, vmax=255)
     plt.show(block=True)
     yn = input("Y/y to accept, N/n to redo: ")[0] in ['Y','y']
 
@@ -198,6 +198,12 @@ def inker(reader, writer, verbose=False):
           )
       final_index -= stride
 
+  # convert -> numpy array -> grayscale -> black & white
+  final_frame = np.array(final_frame, dtype=np.uint8)
+  final_frame = grayscale(final_frame)
+  final_frame = np.where(is_black(final_frame, bw_cutoff), 0, 255)
+  # expect entries to be np.int64 at this point
+  # ask for cropping
   crop = get_crop(final_frame, width, height)
 
   # crop final frame
@@ -208,11 +214,6 @@ def inker(reader, writer, verbose=False):
 
   # re-initialize reader to get back to first frame
   reader._initialize()
-  # convert -> numpy array -> grayscale -> black & white
-  final_frame = np.array(final_frame, dtype=np.uint8)
-  final_frame = np.average(final_frame, axis=2)
-  final_frame = np.where(final_frame < bw_cutoff, 0, 255)
-  # expect entries to be np.int64 at this point
 
   # make list of pixels which are black in the final, i.e. need to be inked
   uninked = np.where(final_frame == 0)
